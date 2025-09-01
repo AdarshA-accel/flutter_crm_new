@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../routes/app_routes.dart';
+import '../../providers/user_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -15,19 +17,41 @@ class _SplashScreenState extends State<SplashScreen> {
     _navigateToNext();
   }
 
-  void _navigateToNext() async {
+  Future<void> _navigateToNext() async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+    // Load saved token & user
+    await userProvider.loadToken();
+    await userProvider.loadUser();
+
+    // Add splash delay
     await Future.delayed(const Duration(seconds: 2));
-    Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+
+    bool valid = false;
+
+    // Validate session if token exists
+    if (userProvider.token != null && userProvider.token!.isNotEmpty) {
+      valid = await userProvider.authenticateSession();
+    }
+
+    if (!mounted) return;
+
+    if (valid) {
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
+    } else {
+      await userProvider.logout(); // clear invalid session
+      Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        child: Image.asset(
-          'assets/images/accelgrowth_logo.png', // update with your actual filename
-          width: 200, // adjust as needed based on Figma size (308px ≈ 200dp)
+        child: Image(
+          image: AssetImage('assets/images/accelgrowth_logo.png'),
+          width: 200,
           fit: BoxFit.contain,
         ),
       ),

@@ -1,7 +1,6 @@
 class AppRoutes {
   static const String splash = '/';
   static const String welcome = '/welcome';
-  static const String signin = '/sign_in';
   static const String login = '/login';
   static const String forgotPassword = '/forgot_password';
   static const String otpVerification = '/otp_verification';
@@ -14,6 +13,12 @@ class AppRoutes {
   static const String leaveBalances = '/leave_balances';
   static const String applyLeave = '/apply_leave';
   static const String sendLeaveRequest = '/send_leave_request';
+  static const String holidays = '/holidays';
+  static const String payslip = '/payslip';
+  static const String payslipDetails = '/payslip_details';
+  static const String request = '/request';
+  static const String sendRequestAsset = '/send_request_asset';
+
 
   static var splashScreen;
 }

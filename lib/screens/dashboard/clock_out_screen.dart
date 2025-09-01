@@ -20,12 +20,29 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
   late Duration elapsed = Duration.zero;
   Timer? _timer;
   int selectedTabIndex = 0;
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
     clockInDateTime = widget.clockInTime;
+
     _startTimer();
+    _loadUserData(); // Ensure token + user are loaded
+  }
+
+  Future<void> _loadUserData() async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    await userProvider.loadToken();
+    await userProvider.loadUser();
+
+    if (userProvider.isLoggedIn) {
+      await userProvider.authenticateSession();
+    }
+
+    if (mounted) {
+      setState(() => isLoading = false);
+    }
   }
 
   void _startTimer() {
@@ -36,17 +53,28 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
     });
   }
 
-  void _handleClockOut() {
+  Future<void> _handleClockOut() async {
     final clockOutTime = DateTime.now();
     final durationWorked = clockOutTime.difference(clockInDateTime);
 
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-    userProvider.setClockOutTime(clockOutTime);
 
-    Navigator.pop(context, {
-      'clockOutTime': clockOutTime,
-      'workedDuration': durationWorked,
-    });
+    // Ensure user is logged in before syncing
+    if (userProvider.isLoggedIn) {
+      await userProvider.syncClockOut(clockOutTime);
+
+      if (mounted) {
+        Navigator.pop(context, {
+          'clockOutTime': clockOutTime,
+          'workedDuration': durationWorked,
+        });
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Session expired. Please log in again.")),
+      );
+      Navigator.pushReplacementNamed(context, '/login');
+    }
   }
 
   String _formattedWorkedDuration() {
@@ -56,7 +84,8 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
     return '$hours:$minutes hrs';
   }
 
-  String get _currentFormattedTime => DateFormat('hh:mm:ss a').format(DateTime.now());
+  String get _currentFormattedTime =>
+      DateFormat('hh:mm:ss a').format(DateTime.now());
 
   bool get hasNotification => false;
 
@@ -70,11 +99,12 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
       );
     }
   }
-    ImageProvider<Object>? _avatarProvider(String path) {
-    if (path.isNotEmpty && File(path).existsSync()) {
+
+  ImageProvider<Object>? _avatarProvider(String? path) {
+    if (path != null && path.isNotEmpty && File(path).existsSync()) {
       return FileImage(File(path));
     }
-    return null; 
+    return null;
   }
 
   void _onCategoryTap(int index) {
@@ -100,6 +130,7 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
   void _onBottomNavTap(int index) {
     setState(() => selectedTabIndex = index);
     final provider = Provider.of<UserProvider>(context, listen: false);
+
     switch (index) {
       case 0:
         if (provider.clockInTime != null && provider.clockOutTime == null) {
@@ -130,24 +161,35 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<UserProvider>(context).user;
-    final avatar = _avatarProvider(user.profileImagePath);
+    final userProvider = Provider.of<UserProvider>(context);
+    final user = userProvider.user;
+    final avatar = _avatarProvider(user?.profileImage);
+
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F5F8),
       body: SafeArea(
         child: Column(
           children: [
-            // Header
+            // Top bar
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset('assets/images/accelgrowth_logo.png', width: 200, height: 50),
+                  Image.asset('assets/images/accelgrowth_logo.png',
+                      width: 200, height: 50),
                   Stack(
                     children: [
-                      Image.asset('assets/images/notification_icon.png', width: 20, height: 25),
+                      Image.asset('assets/images/notification_icon.png',
+                          width: 20, height: 25),
                       if (hasNotification)
                         Positioned(
                           right: 0,
@@ -167,7 +209,7 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
               ),
             ),
 
-            // Search
+            // Search bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
@@ -175,10 +217,12 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search),
                   hintText: 'Search',
-                  hintStyle: const TextStyle(fontSize: 16, color: Color(0xFFB1B1B1)),
+                  hintStyle: const TextStyle(
+                      fontSize: 16, color: Color(0xFFB1B1B1)),
                   filled: true,
                   fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  contentPadding: const EdgeInsets.symmetric(
+                      vertical: 12, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -188,7 +232,7 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
 
             const SizedBox(height: 16),
 
-            // Overview
+            // Today Overview
             Padding(
               padding: const EdgeInsets.only(left: 22, right: 22, top: 16),
               child: Column(
@@ -198,10 +242,15 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
                     children: [
                       const Text(
                         'Today Overview',
-                        style: TextStyle(fontSize: 18, fontFamily: 'PublicSans', fontWeight: FontWeight.w600, color: Color(0xFF444050)),
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontFamily: 'PublicSans',
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF444050)),
                       ),
                       GestureDetector(
-                        onTap: () => Navigator.pushNamed(context, '/Today_overview'),
+                        onTap: () =>
+                            Navigator.pushNamed(context, '/Today_overview'),
                         child: const Text(
                           'See All',
                           style: TextStyle(
@@ -217,7 +266,8 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
                   const SizedBox(height: 6),
                   GestureDetector(
                     onTap: _launchTeams,
-                    child: Image.asset('assets/images/morning_scrum.png', width: 368, height: 74, fit: BoxFit.contain),
+                    child: Image.asset('assets/images/morning_scrum.png',
+                        width: 368, height: 74, fit: BoxFit.contain),
                   ),
                 ],
               ),
@@ -225,156 +275,173 @@ class _ClockOutScreenState extends State<ClockOutScreen> {
 
             const SizedBox(height: 16),
 
-            // Expanded Body
-            Expanded(
+            // Clock card
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Column(
                 children: [
-                  // Clock Container
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      children: [
-                        // Clock Details Row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${DateFormat('EEEE').format(DateTime.now())}\n${_formattedWorkedDuration()}',
-                              style: const TextStyle(fontSize: 14, color: Color(0xFF6D6976)),
-                            ),
-                            Column(
-                              children: [
-                                CircleAvatar(
+                  // Row with date + avatar + year
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${DateFormat('EEEE').format(DateTime.now())}\n${_formattedWorkedDuration()}',
+                        style: const TextStyle(
+                            fontSize: 14, color: Color(0xFF6D6976)),
+                      ),
+                      Column(
+                        children: [
+                          CircleAvatar(
                             radius: 50,
                             backgroundColor: Colors.grey.shade300,
                             backgroundImage: avatar,
                             child: avatar == null
-                                ? const Icon(Icons.person, size: 50, color: Colors.white)
+                                ? const Icon(Icons.person,
+                                    size: 50, color: Colors.white)
                                 : null,
                           ),
                           const SizedBox(height: 4),
-                          Text(user.name),
-                              ],
-                            ),
-                            Text(
-                              '${DateFormat('dd MMMM').format(DateTime.now())}\n${DateFormat('yyyy').format(DateTime.now())}',
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(fontSize: 14, fontFamily: 'PublicSans', color: Color(0xFF6D6976)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        // Clock In/Out Details
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Clock In', style: TextStyle(fontFamily: 'PublicSans', fontWeight: FontWeight.w500, color: Color(0xFF6D6976))),
-                                const SizedBox(height: 4),
-                                Text(DateFormat('hh:mm a').format(clockInDateTime), style: const TextStyle(fontFamily: 'PublicSans', fontWeight: FontWeight.w700, color: Color(0xFF12D419))),
-                              ],
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                const SizedBox(height: 4),
-                                Text(_currentFormattedTime, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF444050))),
-                              ],
-                            ),
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text('Clock Out', style: TextStyle(fontFamily: 'PublicSans', fontWeight: FontWeight.w500, color: Color(0xFF6D6976))),
-                                SizedBox(height: 4),
-                                Text('--:--', style: TextStyle(color: Color(0xFFF1511B))),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Swipe to Clock Out
-                  GestureDetector(
-                    onHorizontalDragEnd: (_) => _handleClockOut(),
-                    child: Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF7367F0),
-                        borderRadius: BorderRadius.circular(8),
+                          Text(user?.fullName ?? "Your Name"),
+                        ],
                       ),
-                      alignment: Alignment.center,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Text(
+                        '${DateFormat('dd MMMM').format(DateTime.now())}\n${DateFormat('yyyy').format(DateTime.now())}',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontFamily: 'PublicSans',
+                            color: Color(0xFF6D6976)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Clock in/out details
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
                         children: [
-                          Image.asset('assets/images/arrow_.png', width: 40),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Swipe to Clock Out',
-                            style: TextStyle(
-                              fontFamily: 'PublicSans',
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 18,
-                            ),
+                          const Text('Clock In',
+                              style: TextStyle(
+                                  fontFamily: 'PublicSans',
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF6D6976))),
+                          const SizedBox(height: 4),
+                          Text(
+                            DateFormat('hh:mm a').format(clockInDateTime),
+                            style: const TextStyle(
+                                fontFamily: 'PublicSans',
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF12D419)),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Category Icons
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Stack(
-                      children: [
-                        Image.asset('assets/images/category_group.png', width: 368, height: 125),
-                        Positioned.fill(
-                          child: Row(
-                            children: List.generate(5, (index) {
-                              return Expanded(
-                                child: GestureDetector(
-                                  onTap: () => _onCategoryTap(index),
-                                  child: Container(color: Colors.transparent),
-                                ),
-                              );
-                            }),
+                      Column(
+                        children: [
+                          const SizedBox(height: 4),
+                          Text(
+                            _currentFormattedTime,
+                            style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF444050)),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                      const Column(
+                        children: [
+                          Text('Clock Out',
+                              style: TextStyle(
+                                  fontFamily: 'PublicSans',
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF6D6976))),
+                          SizedBox(height: 4),
+                          Text('--:--',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFF1511B))),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            // Bottom Nav
+            const SizedBox(height: 16),
+
+            // Swipe to Clock Out
+            GestureDetector(
+              onHorizontalDragEnd: (_) => _handleClockOut(),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7367F0),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Image.asset('assets/images/arrow_.png', width: 40),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Swipe to Clock Out',
+                      style: TextStyle(
+                          fontFamily: 'PublicSans',
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 18),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Categories
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Stack(
+                children: [
+                  Image.asset('assets/images/category_group.png',
+                      width: 368, height: 125),
+                  Positioned.fill(
+                    child: Row(
+                      children: List.generate(5, (index) {
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => _onCategoryTap(index),
+                            child: Container(color: Colors.transparent),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+
+            // Bottom nav
             SizedBox(
               height: 88,
               child: Stack(
                 children: [
-                  Image.asset(
-                    'assets/images/bottom_nav_group.png',
-                    width: double.infinity,
-                    height: 88,
-                    fit: BoxFit.cover,
-                  ),
+                  Image.asset('assets/images/bottom_nav_group.png',
+                      width: double.infinity,
+                      height: 88,
+                      fit: BoxFit.cover),
                   Positioned.fill(
                     child: Row(
                       children: List.generate(4, (index) {

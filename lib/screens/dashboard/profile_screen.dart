@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_crm/providers/user_provider.dart';
+import 'package:flutter_crm/models/user_model.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,17 +19,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _picker = ImagePicker();
   int selectedTabIndex = 3;
 
-  @override
-  void initState() {
-    super.initState();
-  }
-
   Future<void> _pickImage() async {
     final picked = await _picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
       setState(() {
         _pickedImage = File(picked.path);
       });
+
+      final provider = Provider.of<UserProvider>(context, listen: false);
+      final existing = provider.user;
+      if (existing != null) {
+        final updatedUser = existing.toJson();
+        updatedUser["profileImage"] = picked.path;
+        provider.updateUserFromMap(updatedUser);
+      }
     }
   }
 
@@ -36,8 +40,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final provider = Provider.of<UserProvider>(context, listen: false);
     final user = provider.user;
 
-    _nameController.text = user.name;
-    _designationController.text = user.designation;
+    _nameController.text = user?.fullName ?? "";
+    _designationController.text = user?.designation ?? "";
 
     showModalBottomSheet(
       context: context,
@@ -119,52 +123,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final provider = Provider.of<UserProvider>(context, listen: false);
     final existing = provider.user;
 
-    provider.setUser(UserModel(
-      name: name.isNotEmpty ? name : existing.name,
-      designation: designation.isNotEmpty ? designation : existing.designation,
-      profileImagePath: _pickedImage?.path ?? existing.profileImagePath,
-    ));
+    if (existing != null) {
+      final updatedUser = existing.toJson();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated')),
-    );
-  }
+      // split full name into first/last if possible
+      final parts = name.split(" ");
+      if (parts.isNotEmpty) {
+        updatedUser["firstName"] = parts.first;
+        updatedUser["lastName"] =
+            parts.length > 1 ? parts.sublist(1).join(" ") : existing.lastName;
+      }
 
-  void _handleBackNavigation() {
-    final provider = Provider.of<UserProvider>(context, listen: false);
-    if (provider.clockInTime != null && provider.clockOutTime == null) {
-      Navigator.pushReplacementNamed(context, '/clock_out', arguments: {
-        'clockInTime': provider.clockInTime,
-      });
-    } else {
-      Navigator.pushReplacementNamed(context, '/home_screen');
+      updatedUser["designation"] =
+          designation.isNotEmpty ? designation : existing.designation;
+      updatedUser["profileImage"] = _pickedImage?.path ?? existing.profileImage;
+
+      provider.updateUserFromMap(updatedUser);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated')),
+      );
     }
   }
 
-  void _handleLogout() {
-    Provider.of<UserProvider>(context, listen: false).resetClockData();
-    Provider.of<UserProvider>(context, listen: false).setUser(
-      UserModel(
-        name: 'Your Name',
-        designation: 'Your Designation',
-        profileImagePath: '',
-      ),
-    );
+  void _handleLogout() async {
+    await Provider.of<UserProvider>(context, listen: false).logout();
     Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
   }
 
   void _onBottomNavTap(int index) {
     setState(() => selectedTabIndex = index);
-    final provider = Provider.of<UserProvider>(context, listen: false);
     switch (index) {
       case 0:
-        if (provider.clockInTime != null && provider.clockOutTime == null) {
-          Navigator.pushReplacementNamed(context, '/clock_out', arguments: {
-            'clockInTime': provider.clockInTime,
-          });
-        } else {
-          Navigator.pushReplacementNamed(context, '/home_screen');
-        }
+        Navigator.pushReplacementNamed(context, '/home_screen');
         break;
       case 1:
         Navigator.pushReplacementNamed(context, '/leave');
@@ -180,12 +171,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<UserProvider>(context).user;
+    final provider = Provider.of<UserProvider>(context);
+    final UserModel? user = provider.user;
 
     final imageProvider = _pickedImage != null
         ? FileImage(_pickedImage!)
-        : (user.profileImagePath.isNotEmpty && File(user.profileImagePath).existsSync()
-            ? FileImage(File(user.profileImagePath))
+        : (user != null &&
+                user.profileImage.isNotEmpty &&
+                File(user.profileImage).existsSync()
+            ? FileImage(File(user.profileImage))
             : null);
 
     return Scaffold(
@@ -204,7 +198,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         GestureDetector(
-                          onTap: _handleBackNavigation,
+                          onTap: () => Navigator.pushReplacementNamed(
+                              context, '/home_screen'),
                           child: Image.asset(
                             'assets/images/back_profile.png',
                             width: 23,
@@ -213,7 +208,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const Text(
                           "Profile",
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: Color(0xFF444050)),
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF444050)),
                         ),
                         GestureDetector(
                           onTap: () {
@@ -249,7 +247,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           backgroundColor: Colors.grey.shade300,
                           backgroundImage: imageProvider,
                           child: imageProvider == null
-                              ? const Icon(Icons.person, size: 50, color: Colors.white)
+                              ? const Icon(Icons.person,
+                                  size: 50, color: Colors.white)
                               : null,
                         ),
                       ),
@@ -261,7 +260,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                user.name,
+                                user?.fullName ?? "Unknown User",
                                 style: const TextStyle(
                                   fontFamily: 'PublicSans',
                                   fontSize: 20,
@@ -272,7 +271,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                user.designation,
+                                user?.designation.isNotEmpty == true
+                                    ? user!.designation
+                                    : "No Designation",
                                 style: const TextStyle(
                                   fontFamily: 'PublicSans',
                                   fontSize: 14,
@@ -339,7 +340,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 10),
                         _buildImageIcon('assets/images/feedback.png', '/feedback'),
                         const SizedBox(height: 10),
-                        _buildImageIcon('assets/images/logout.png', '', onTap: _handleLogout),
+                        _buildImageIcon('assets/images/logout.png', '',
+                            onTap: _handleLogout),
                       ],
                     ),
                   ),
@@ -394,7 +396,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildImageIcon(String imagePath, String route, {VoidCallback? onTap}) {
+  Widget _buildImageIcon(String imagePath, String route,
+      {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap ?? () => Navigator.pushNamed(context, route),
       child: ClipRRect(

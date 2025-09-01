@@ -36,7 +36,7 @@ class PasswordChangedScreen extends StatelessWidget {
               left: 25,
               child: GestureDetector(
                 onTap: () {
-                  Navigator.pushReplacementNamed(context, '/sign_in');
+                  Navigator.pushReplacementNamed(context, '/login');
                 },
                 child: Container(
                   width: 362,

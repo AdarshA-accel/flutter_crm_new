@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_crm/screens/dashboard/leave_balances.dart';
+import 'package:flutter_crm/screens/dashboard/send_request_asset.dart';
 import 'app_routes.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/dashboard/home_screen.dart';
 import '../screens/splash/splash_screen.dart';
 import '../screens/welcome/welcome_screen.dart';
-import '../screens/auth/sign_in_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/otp_verification_screen.dart';
 import '../screens/auth/reset_password_screen.dart';
@@ -14,6 +15,9 @@ import '../screens/dashboard/clock_out_screen.dart';
 import '../screens/dashboard/leave_screen.dart';
 import '../screens/dashboard/apply_leave_screen.dart';
 import '../screens/dashboard/send_leave_request_screen.dart';
+import '../screens/dashboard/holidays.dart';
+import '../screens/dashboard/payslip_screen.dart';
+import '../screens/dashboard/request.dart';
 
 class RouteGenerator {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -23,9 +27,6 @@ class RouteGenerator {
 
       case AppRoutes.welcome:
         return MaterialPageRoute(builder: (_) => const WelcomeScreen());
-
-      case AppRoutes.signin:
-        return MaterialPageRoute(builder: (_) => const SignInScreen());
 
       case AppRoutes.forgotPassword:
         return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
@@ -55,7 +56,22 @@ class RouteGenerator {
         return MaterialPageRoute(builder: (_) => const ApplyLeaveScreen());
 
       case AppRoutes.sendLeaveRequest:
-        return MaterialPageRoute(builder: (_) => const SendLeaveRequestScreen());  
+        return MaterialPageRoute(builder: (_) => const SendLeaveRequestScreen());
+
+      case AppRoutes.holidays:
+        return MaterialPageRoute(builder: (_) => const HolidaysScreen());
+
+      case AppRoutes.payslip:
+        return MaterialPageRoute(builder: (_) => const PayslipScreen());
+
+      case AppRoutes.request:
+        return MaterialPageRoute(builder: (_) => const RequestAssetScreen());
+
+      case AppRoutes.sendRequestAsset:
+        return MaterialPageRoute(builder: (_) => const SendRequestAssetScreen ());
+
+      case AppRoutes.leaveBalances:
+        return MaterialPageRoute(builder: (_) => const LeaveBalancesScreen());  
 
       case AppRoutes.clockOut:
         final args = settings.arguments as Map<String, dynamic>?;

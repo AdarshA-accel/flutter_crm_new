@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_crm/providers/user_provider.dart';
 
 class ApplyLeaveScreen extends StatefulWidget {
   const ApplyLeaveScreen({super.key});
@@ -14,16 +16,16 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
   String? _leaveType;
   final TextEditingController _descriptionController = TextEditingController();
 
-  List<String> leaveTypes = [
-    'Paid Leave',
-    'Sick /Casual Leave',
-    'Paternity Leave',
-    'Bereavement Leave',
-    'Floater Leave',
-    'Special Leave',
-    'Comp Offs',
-    'Unpaid Leave',
-  ];
+  Map<String, int> leaveTypes = {
+    'Paid Leave': 3,
+    'Sick /Casual Leave': 3,
+    'Paternity Leave': 21,
+    'Bereavement Leave': 7,
+    'Floater Leave': 0,
+    'Special Leave': 1,
+    'Comp Offs': 0,
+    'Unpaid Leave': 9999,
+  };
 
   int get leaveDays {
     if (_startDate == null || _endDate == null) return 0;
@@ -69,70 +71,192 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
     }
   }
 
-  void _showLeaveTypeSelector() {
+  void _showLeaveTypeBottomSheet() {
+    final types = leaveTypes.keys.toList();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "Select Leave Type",
+        return SizedBox(
+          height: 320,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select Leave Type',
                   style: TextStyle(
                     fontFamily: 'PublicSans',
-                    fontWeight: FontWeight.w500,
-                    fontSize: 16,
-                    color: Color(0xFFC9C9C9),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                    color: Color(0xFF444050),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: leaveTypes.map((type) {
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _leaveType = type;
-                      });
-                      Navigator.pop(context);
-                    },
-                    child: Container(
-                      width: 100,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF2F0FE),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: Text(
-                          type,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Color(0xFF7367F0),
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
-                          ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: GridView.count(
+                    crossAxisCount: 4,
+                    mainAxisSpacing: 20,
+                    crossAxisSpacing: 16,
+                    childAspectRatio: 0.8,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: types.map((key) {
+                      final count = leaveTypes[key]!;
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _leaveType = key;
+                            if (count > 0 && count < 9999) {
+                              leaveTypes[key] = count - 1;
+                            }
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE9E7FF),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  count == 9999
+                                      ? '∞'
+                                      : count.toString().padLeft(2, '0'),
+                                  style: const TextStyle(
+                                    color: Color(0xFF7367F0),
+                                    fontFamily: 'PublicSans',
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              key,
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontFamily: 'PublicSans',
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF444050),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-            ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Future<void> _submitLeaveRequest() async {
+    if (_startDate == null ||
+        _endDate == null ||
+        _leaveType == null ||
+        leaveDays <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please complete all fields")),
+      );
+      return;
+    }
+
+    final provider = Provider.of<UserProvider>(context, listen: false);
+
+    // ✅ Ensure token is loaded before calling API
+    await provider.loadToken();
+
+    if (provider.token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Session expired. Please log in again.")),
+      );
+      return;
+    }
+
+    final result = await provider.applyLeave(
+      startDate: _startDate!,
+      endDate: _endDate!,
+      type: _leaveType!,
+      reason: _descriptionController.text.trim(),
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result["message"])),
+    );
+
+    if (result["success"]) {
+      Navigator.pop(context, true);
+    }
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontFamily: 'PublicSans',
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: Color(0xFF444050),
+      ),
+    );
+  }
+
+  Widget _buildDateField(DateTime? date, VoidCallback onTap) {
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            padding: const EdgeInsets.only(left: 12, right: 50),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              date != null
+                  ? DateFormat('dd-MM-yyyy').format(date)
+                  : "DD-MM-YYYY",
+              style: TextStyle(
+                color: date != null ? Colors.black : Colors.grey,
+                fontFamily: 'PublicSans',
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 13,
+          right: 12,
+          child: GestureDetector(
+            onTap: onTap,
+            child: const Icon(
+              Icons.calendar_today_outlined,
+              size: 24,
+              color: Color(0xFF7367F0),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -159,18 +283,15 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-
                   _buildSectionTitle("Start Date"),
                   _buildDateField(_startDate, () => _showCalendarPicker(true)),
                   const SizedBox(height: 16),
-
                   _buildSectionTitle("End Date"),
                   _buildDateField(_endDate, () => _showCalendarPicker(false)),
                   const SizedBox(height: 16),
-
                   _buildSectionTitle("Leave Type"),
                   GestureDetector(
-                    onTap: _showLeaveTypeSelector,
+                    onTap: _showLeaveTypeBottomSheet,
                     child: Container(
                       height: 50,
                       decoration: BoxDecoration(
@@ -183,11 +304,13 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                         children: [
                           Text(
                             _leaveType ?? "Select Leave Type",
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'PublicSans',
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
-                              color: Color(0xFFC9C9C9),
+                              color: _leaveType == null
+                                  ? const Color(0xFFC9C9C9)
+                                  : const Color(0xFF444050),
                             ),
                           ),
                           const Icon(Icons.arrow_drop_down, color: Colors.grey),
@@ -196,7 +319,6 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   _buildSectionTitle("Description"),
                   Container(
                     decoration: BoxDecoration(
@@ -219,7 +341,6 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-
                   Container(
                     width: double.infinity,
                     height: 65,
@@ -254,7 +375,6 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                     ),
                   ),
                   const Spacer(),
-
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -265,9 +385,7 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/send_leave_request');
-                      },
+                      onPressed: _submitLeaveRequest,
                       child: const Text(
                         "SEND REQUEST",
                         style: TextStyle(
@@ -283,11 +401,9 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                 ],
               ),
             ),
-
-            // Back Icon (Top Right)
             Positioned(
               top: 24,
-              left: 343,
+              right: 16,
               child: GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: const SizedBox(
@@ -304,57 +420,6 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontFamily: 'PublicSans',
-        fontSize: 16,
-        fontWeight: FontWeight.w500,
-        color: Color(0xFF444050),
-      ),
-    );
-  }
-
-  Widget _buildDateField(DateTime? date, VoidCallback onTap) {
-    return Stack(
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            padding: const EdgeInsets.only(left: 12, right: 50),
-            alignment: Alignment.centerLeft,
-            child: Text(
-              date != null ? DateFormat('dd-MM-yyyy').format(date) : "DD-MM-YYYY",
-              style: TextStyle(
-                color: date != null ? Colors.black : Colors.grey,
-                fontFamily: 'PublicSans',
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          top: 13,
-          left: 310,
-          child: GestureDetector(
-            onTap: onTap,
-            child: const Icon(
-              Icons.calendar_today_outlined,
-              size: 24,
-              color: Color(0xFF7367F0),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

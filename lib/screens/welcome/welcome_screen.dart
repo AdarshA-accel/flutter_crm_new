@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../routes/app_routes.dart';
+import '../../providers/user_provider.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -17,6 +20,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     ['assets/images/usability testing-rafiki 1.png', 'assets/images/Group 11249.png'],
     ['assets/images/Team work-amico 1.png', 'assets/images/Group 11250.png'],
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfLoggedIn();
+  }
+
+  Future<void> _checkIfLoggedIn() async {
+    final provider = Provider.of<UserProvider>(context, listen: false);
+    await provider.loadToken();
+    await provider.loadUser();
+    if (provider.isLoggedIn) {
+      // Already logged in → go straight to home
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
+    }
+  }
 
   @override
   void dispose() {
@@ -48,8 +67,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
     return Column(
       children: [
-        SizedBox(height: screenHeight * 0.27), // Top padding
-
+        SizedBox(height: screenHeight * 0.27),
         Image.asset(
           _imagePaths[index][0],
           width: screenWidth * 0.8,
@@ -75,7 +93,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Background ellipse
             Positioned(
               top: -h * 0.15,
               left: -w * 0.1,
@@ -92,8 +109,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
               ),
             ),
-
-            // Logo
             Positioned(
               top: h * 0.025,
               left: w * 0.04,
@@ -103,8 +118,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 fit: BoxFit.contain,
               ),
             ),
-
-            // PageView content
             PageView.builder(
               controller: _pageController,
               itemCount: _imagePaths.length,
@@ -113,10 +126,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               },
               itemBuilder: (context, index) => _buildPage(context, index),
             ),
-
-            // Buttons
             if (_currentPage == 0) ...[
-              // Get Started Button
               Positioned(
                 bottom: h * 0.1,
                 left: w * 0.06,
@@ -131,8 +141,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ),
                 ),
               ),
-
-              // Skip Button
               Positioned(
                 bottom: h * 0.05,
                 left: w * 0.43,
@@ -166,7 +174,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 left: w * 0.1,
                 right: w * 0.1,
                 child: GestureDetector(
-                  onTap: () => Navigator.pushReplacementNamed(context, '/sign_in'),
+                  onTap: () =>
+                      Navigator.pushReplacementNamed(context, AppRoutes.login),
                   child: Image.asset(
                     'assets/images/Login (Button) (4).png',
                     width: w * 0.8,

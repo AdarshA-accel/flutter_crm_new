@@ -23,12 +23,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       _isSending = false;
     });
 
-    // Navigate to OTP Verification Screen
     Navigator.pushReplacementNamed(context, '/otp_verification');
   }
 
   void _goToSignIn() {
-    Navigator.pushReplacementNamed(context, '/sign_in');
+    Navigator.pushReplacementNamed(context, '/login');
   }
 
   @override
@@ -50,7 +49,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 padding: const EdgeInsets.only(top: 45, left: 10),
                 child: GestureDetector(
                   onTap: () {
-                    Navigator.pushReplacementNamed(context, '/sign_in');
+                    Navigator.pushReplacementNamed(context, '/login');
                   },
                   child: Image.asset(
                     'assets/images/back.png',
@@ -166,7 +165,7 @@ const SizedBox(height: 32),
                                 ),
                                 recognizer: TapGestureRecognizer()
                                   ..onTap = () {
-                                    Navigator.pushNamed(context, '/sign_in');
+                                    Navigator.pushNamed(context, '/login');
                                   },
                               ),
                             ],
